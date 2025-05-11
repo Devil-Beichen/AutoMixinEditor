@@ -16,7 +16,7 @@ void FAutoMixinEditorModule::StartupModule()
 }
 
 // 注册按键
-void FAutoMixinEditorModule::RegistrationButton()
+void FAutoMixinEditorModule::RegistrationButton() const
 {
 	AddMixinFile();
 	InitStyleSet();
@@ -57,9 +57,9 @@ void FAutoMixinEditorModule::RegistrationButton()
 void FAutoMixinEditorModule::ButtonPressed()
 {
 	// UE_LOG(LogTemp, Log, TEXT("ButtonPressed"));
-	Blueprint = GetActiveBlueprint();
+
 	// 获取当前活动的蓝图
-	if (Blueprint)
+	if (const UBlueprint* Blueprint = GetActiveBlueprint())
 	{
 		// 获取蓝图的路径名称
 		const FString BlueprintPath = Blueprint->GetPathName();

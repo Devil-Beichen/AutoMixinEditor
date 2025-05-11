@@ -10,13 +10,12 @@ public:
 	virtual void ShutdownModule() override;
 
 private:
-	UBlueprint* Blueprint = nullptr;
 	// 添加mixin文件
 	void AddMixinFile() const;
 	// 注册按键
-	void RegistrationButton();
+	void RegistrationButton() const;
 	// 按键按下
-	void ButtonPressed();
+	static void ButtonPressed();
 	// 获取当前激活的Blueprint
 	static UBlueprint* GetActiveBlueprint();
 
