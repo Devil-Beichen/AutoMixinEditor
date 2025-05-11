@@ -19,6 +19,18 @@ private:
 	// 获取当前激活的Blueprint
 	static UBlueprint* GetActiveBlueprint();
 
+	// 在内容浏览器右键注册一个按键
+	void RegistrationContextButton() const;
+
+	/**
+	 * @brief 菜单按钮按下
+	 * @param SelectedAssets	选中的资产 
+	 */
+	static void ContextButtonPressed(const TArray<FAssetData>& SelectedAssets);
+
+	// 生成ts文件
+	static void GenerateTs(const UBlueprint* Blueprint);
+
 	/**
 	 * 处理模板
 	 * @param TemplateContent	模板内容 

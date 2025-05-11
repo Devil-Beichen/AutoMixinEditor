@@ -2,6 +2,7 @@
 
 #include "BlueprintEditor.h"
 #include "BlueprintEditorModule.h"
+#include "ContentBrowserModule.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Styling/SlateStyleRegistry.h"
 #include "Widgets/Notifications/SNotificationList.h"
@@ -12,14 +13,15 @@ TSharedPtr<FSlateStyleSet> FAutoMixinEditorModule::StyleSet = nullptr;
 
 void FAutoMixinEditorModule::StartupModule()
 {
-	RegistrationButton();
+	AddMixinFile(); // 添加mixin文件
+	InitStyleSet(); // 初始化样式
+	RegistrationButton(); // 注册按键
+	RegistrationContextButton(); // 注册右键菜单
 }
 
 // 注册按键
 void FAutoMixinEditorModule::RegistrationButton() const
 {
-	AddMixinFile();
-	InitStyleSet();
 	// 获取蓝图编辑器模块
 	FBlueprintEditorModule& BlueprintEditorModule = FModuleManager::LoadModuleChecked<FBlueprintEditorModule>("Kismet");
 
@@ -43,7 +45,7 @@ void FAutoMixinEditorModule::RegistrationButton() const
 				),
 				NAME_None, // 没有命令名
 				LOCTEXT("GenerateTemplate", "创建TS文件"), // 按钮显示文本
-				LOCTEXT("GenerateTemplateTooltip", "生成"), // 按钮提示文本
+				LOCTEXT("GenerateTemplateTooltip", "生成TypeScript文件"), // 按钮提示文本
 				FSlateIcon(GetStyleName(), "MixinIcon") // 按钮图标（这里使用空图标）
 			);
 		})
@@ -53,13 +55,78 @@ void FAutoMixinEditorModule::RegistrationButton() const
 	BlueprintEditorModule.GetMenuExtensibilityManager()->AddExtender(MenuExtender);
 }
 
+// 在内容浏览器右键的时候注册一个按键
+void FAutoMixinEditorModule::RegistrationContextButton() const
+{
+	FContentBrowserModule& ContentBrowserModule = FModuleManager::LoadModuleChecked<FContentBrowserModule>(TEXT("ContentBrowser"));
+	TArray<FContentBrowserMenuExtender_SelectedAssets>& CBMenuAssetExtenderDelegates = ContentBrowserModule.GetAllAssetViewContextMenuExtenders();
+
+	// 创建菜单扩展委托
+	FContentBrowserMenuExtender_SelectedAssets MenuExtenderDelegate;
+	MenuExtenderDelegate.BindLambda([this](const TArray<FAssetData>& SelectedAssets)
+	{
+		TSharedRef<FExtender> Extender = MakeShared<FExtender>();
+
+		Extender->AddMenuExtension(
+			"GetAssetActions", // 扩展菜单的锚点位置
+			EExtensionHook::After, // 在指定锚点之后插入
+			nullptr, // 无命令列表
+			FMenuExtensionDelegate::CreateLambda([this, SelectedAssets](FMenuBuilder& MenuBuilder)
+			{
+				// 添加菜单项
+				MenuBuilder.AddMenuEntry(
+					LOCTEXT("GenerateTSFile", "创建TS文件"), // 菜单文本
+					LOCTEXT("GenerateTSFileTooltip", "生成TypeScript文件"), // 提示信息
+					FSlateIcon(GetStyleName(), "MixinIcon"), // 使用自定义图标
+					FUIAction(
+						FExecuteAction::CreateLambda([this, SelectedAssets]()
+						{
+							// 点击时处理选中的资源
+							ContextButtonPressed(SelectedAssets);
+						}),
+						FCanExecuteAction::CreateLambda([SelectedAssets]()
+						{
+							// 可选：验证是否允许执行（例如至少选中一个资产）
+							return SelectedAssets.Num() > 0;
+						})
+					)
+				);
+			})
+		);
+		return Extender;
+	});
+
+	// 注册扩展委托
+	CBMenuAssetExtenderDelegates.Add(MenuExtenderDelegate);
+}
+
+
 // 当按钮被按下时调用此函数
 void FAutoMixinEditorModule::ButtonPressed()
 {
 	// UE_LOG(LogTemp, Log, TEXT("ButtonPressed"));
 
-	// 获取当前活动的蓝图
-	if (const UBlueprint* Blueprint = GetActiveBlueprint())
+	GenerateTs(GetActiveBlueprint());
+}
+
+void FAutoMixinEditorModule::ContextButtonPressed(const TArray<FAssetData>& SelectedAssets)
+{
+	// 确保至少有一个资产被选中
+	if (SelectedAssets.IsEmpty()) return;
+	for (const FAssetData& AssetData : SelectedAssets)
+	{
+		// 获取选中的蓝图
+		if (const UBlueprint* Blueprint = Cast<UBlueprint>(AssetData.GetAsset()))
+		{
+			GenerateTs(Blueprint);
+		}
+	}
+}
+
+// 生成TS文件
+void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
+{
+	if (Blueprint)
 	{
 		// 获取蓝图的路径名称
 		const FString BlueprintPath = Blueprint->GetPathName();
@@ -86,7 +153,7 @@ void FAutoMixinEditorModule::ButtonPressed()
 				// 处理模板并生成ts文件内容
 				const FString TsContent = ProcessTemplate(TemplateContent, BlueprintPath, FileName);
 				// 保存生成的内容到文件
-				if (FFileHelper::SaveStringToFile(TsContent, *TsFilePath))
+				if (FFileHelper::SaveStringToFile(TsContent, *TsFilePath, FFileHelper::EEncodingOptions::ForceUTF8))
 				{
 					// 显示通知
 					FNotificationInfo Info(FText::Format(LOCTEXT("TsFileGenerated", "TS文件生成成功->路径{0}"), FText::FromString(TsFilePath)));
@@ -105,7 +172,7 @@ void FAutoMixinEditorModule::ButtonPressed()
 							if (!MainGameTsContent.Contains(TEXT("import \".") + TsPath + "\";"))
 							{
 								MainGameTsContent += TEXT("import \"."+TsPath + "\";\n");
-								FFileHelper::SaveStringToFile(MainGameTsContent, *MainGameTsPath);
+								FFileHelper::SaveStringToFile(MainGameTsContent, *MainGameTsPath, FFileHelper::EEncodingOptions::ForceUTF8);
 								UE_LOG(LogTemp, Log, TEXT("MainGame.ts更新成功"));
 							}
 						}
@@ -120,7 +187,6 @@ void FAutoMixinEditorModule::ButtonPressed()
 		}
 	}
 }
-
 
 // 获取当前活动蓝图
 UBlueprint* FAutoMixinEditorModule::GetActiveBlueprint()
@@ -162,7 +228,13 @@ UBlueprint* FAutoMixinEditorModule::GetActiveBlueprint()
 	return LastBlueprint;
 }
 
-
+/**
+ * @brief					处理模板
+ * @param TemplateContent	模板内容 
+ * @param BlueprintPath		蓝图路径
+ * @param FileName			文件名
+ * @return 
+ */
 FString FAutoMixinEditorModule::ProcessTemplate(const FString& TemplateContent, FString BlueprintPath, const FString& FileName)
 {
 	FString Result = TemplateContent;
@@ -235,7 +307,7 @@ void FAutoMixinEditorModule::AddMixinFile() const
 		FString MixinContent;
 		if (FFileHelper::LoadFileToString(MixinContent, *MixinTemplatePath))
 		{
-			FFileHelper::SaveStringToFile(MixinContent, *MixinPath);
+			FFileHelper::SaveStringToFile(MixinContent, *MixinPath, FFileHelper::EEncodingOptions::ForceUTF8);
 		}
 	}
 }
