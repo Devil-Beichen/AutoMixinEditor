@@ -11,12 +11,31 @@
 
 TSharedPtr<FSlateStyleSet> FAutoMixinEditorModule::StyleSet = nullptr;
 
+// 存储最后一个标签页
+static TWeakPtr<SDockTab> LastForegroundTab;
+
 void FAutoMixinEditorModule::StartupModule()
 {
 	AddMixinFile(); // 添加mixin文件
 	InitStyleSet(); // 初始化样式
 	RegistrationButton(); // 注册按键
 	RegistrationContextButton(); // 注册右键菜单
+
+	// 订阅标签切换事件
+	FGlobalTabmanager::Get()->OnTabForegrounded_Subscribe(
+		FOnActiveTabChanged::FDelegate::CreateLambda([](TSharedPtr<SDockTab> NewlyActiveTab, TSharedPtr<SDockTab> PreviouslyActiveTab)
+		{
+			if (!NewlyActiveTab.IsValid() || NewlyActiveTab == LastForegroundTab.Pin())
+			{
+				return;
+			}
+			LastForegroundTab = NewlyActiveTab;
+			if (LastForegroundTab.IsValid())
+			{
+				// UE_LOG(LogTemp, Log, TEXT("标签页已切换: %s"), *LastForegroundTab.Pin().Get()->GetTabLabel().ToString());
+			}
+		})
+	);
 }
 
 // 注册按键
@@ -199,8 +218,10 @@ UBlueprint* FAutoMixinEditorModule::GetActiveBlueprint()
 	float LastActivationTime = 0.0f;
 	// 初始化最后激活的蓝图指针
 	UBlueprint* LastBlueprint = nullptr;
+	// 初始化最后聚焦的编辑器窗口
+	IAssetEditorInstance* AssetEditorInstance = nullptr;
 
-	// 遍历所有正在编辑的资产
+	// 遍历所有被编辑的资产，寻找最后编辑的蓝图资产
 	for (UObject* EditedAsset : EditedAssets)
 	{
 		// 第一步：过滤非蓝图资产
@@ -208,19 +229,14 @@ UBlueprint* FAutoMixinEditorModule::GetActiveBlueprint()
 		if (!EditedAsset->IsA<UBlueprint>()) continue;
 
 		// 第二步：获取关联的编辑器实例
-		IAssetEditorInstance* AssetEditorInstance = AssetEditorSubsystem->FindEditorForAsset(EditedAsset, false);
+		AssetEditorInstance = AssetEditorSubsystem->FindEditorForAsset(EditedAsset, false);
 		if (!AssetEditorInstance) continue;
 
-		// 第三步：安全类型转换到具体编辑器类型
-		if (FBlueprintEditor* BlueprintEditor = static_cast<FBlueprintEditor*>(AssetEditorInstance))
+		// 第三步：检查当前编辑的资产是否是最后聚焦的编辑器窗口 当最后选中的编辑器窗口与当前资产的编辑器窗口相同时，记录该蓝图资产
+		if (LastForegroundTab.IsValid() && LastForegroundTab == AssetEditorInstance->GetAssociatedTabManager()->GetOwnerTab())
 		{
-			// 第五步：获取激活时间并比较
-			if (BlueprintEditor->GetLastActivationTime() > LastActivationTime)
-			{
-				LastActivationTime = BlueprintEditor->GetLastActivationTime();
-				// 更新最后激活的蓝图
-				LastBlueprint = CastChecked<UBlueprint>(EditedAsset);
-			}
+			LastBlueprint = CastChecked<UBlueprint>(EditedAsset);
+			break;
 		}
 	}
 
