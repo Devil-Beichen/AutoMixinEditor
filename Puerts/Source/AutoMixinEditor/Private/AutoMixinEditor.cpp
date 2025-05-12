@@ -1,6 +1,5 @@
 ﻿#include "AutoMixinEditor.h"
 
-#include "BlueprintEditor.h"
 #include "BlueprintEditorModule.h"
 #include "ContentBrowserModule.h"
 #include "Framework/Notifications/NotificationManager.h"
@@ -23,7 +22,7 @@ void FAutoMixinEditorModule::StartupModule()
 
 	// 订阅标签切换事件
 	FGlobalTabmanager::Get()->OnTabForegrounded_Subscribe(
-		FOnActiveTabChanged::FDelegate::CreateLambda([](TSharedPtr<SDockTab> NewlyActiveTab, TSharedPtr<SDockTab> PreviouslyActiveTab)
+		FOnActiveTabChanged::FDelegate::CreateLambda([](const TSharedPtr<SDockTab>& NewlyActiveTab, const TSharedPtr<SDockTab>& PreviouslyActiveTab)
 		{
 			if (!NewlyActiveTab.IsValid() || NewlyActiveTab == LastForegroundTab.Pin())
 			{
@@ -214,8 +213,6 @@ UBlueprint* FAutoMixinEditorModule::GetActiveBlueprint()
 	UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
 	// 获取所有正在编辑的资产
 	TArray<UObject*> EditedAssets = AssetEditorSubsystem->GetAllEditedAssets();
-	// 初始化最后激活时间
-	float LastActivationTime = 0.0f;
 	// 初始化最后激活的蓝图指针
 	UBlueprint* LastBlueprint = nullptr;
 	// 初始化最后聚焦的编辑器窗口
