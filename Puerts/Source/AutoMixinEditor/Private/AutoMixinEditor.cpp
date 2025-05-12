@@ -8,17 +8,30 @@
 
 #define LOCTEXT_NAMESPACE "FAutoMixinEditorModule"
 
+// 常量定义
+static const FString TEMPLATE_NAME = TEXT("MixinTemplate.ts"); // 模板文件名
+static const FString TYPE_SCRIPT_DIR = TEXT("TypeScript"); // TypeScript文件夹
+static const FString PUERTS_RESOURCES_PATH = TEXT("Puerts/Resources"); // Puerts资源路径
+
 TSharedPtr<FSlateStyleSet> FAutoMixinEditorModule::StyleSet = nullptr;
 
 // 存储最后一个标签页
 static TWeakPtr<SDockTab> LastForegroundTab = nullptr;
 
+// 标签切换事件句柄
+static FDelegateHandle TabForegroundedHandle;
+
 // 获取AssetEditorSubsystem
 static UAssetEditorSubsystem* AssetEditorSubsystem = nullptr;
 
+// 编辑器窗口
+static IAssetEditorInstance* AssetEditorInstance = nullptr;
+
+// 最后激活的蓝图指针
+static UBlueprint* LastBlueprint = nullptr;
+
 void FAutoMixinEditorModule::StartupModule()
 {
-
 	// 获取AssetEditorSubsystem
 	AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
 
@@ -28,7 +41,7 @@ void FAutoMixinEditorModule::StartupModule()
 	RegistrationContextButton(); // 注册右键菜单
 
 	// 订阅标签切换事件
-	FGlobalTabmanager::Get()->OnTabForegrounded_Subscribe(
+	TabForegroundedHandle = FGlobalTabmanager::Get()->OnTabForegrounded_Subscribe(
 		FOnActiveTabChanged::FDelegate::CreateLambda([](const TSharedPtr<SDockTab>& NewlyActiveTab, const TSharedPtr<SDockTab>& PreviouslyActiveTab)
 		{
 			if (!NewlyActiveTab.IsValid() || NewlyActiveTab == LastForegroundTab.Pin())
@@ -43,6 +56,7 @@ void FAutoMixinEditorModule::StartupModule()
 		})
 	);
 }
+
 // 注册按键
 void FAutoMixinEditorModule::RegistrationButton() const
 {
@@ -170,7 +184,7 @@ void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
 			const FString FileName = StringArray[StringArray.Num() - 1];
 
 			// 读取模板文件
-			const FString TemplatePath = FPaths::Combine(FPaths::ProjectPluginsDir(),TEXT("Puerts"),TEXT("Resources"),TEXT("MixinTemplate.ts"));
+			const FString TemplatePath = FPaths::Combine(FPaths::ProjectPluginsDir(), PUERTS_RESOURCES_PATH, TEMPLATE_NAME);
 			FString TemplateContent;
 			if (FFileHelper::LoadFileToString(TemplateContent, *TemplatePath))
 			{
@@ -185,7 +199,7 @@ void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
 					FSlateNotificationManager::Get().AddNotification(Info);
 
 					// 更新MainGame.ts文件
-					const FString MainGameTsPath = FPaths::Combine(FPaths::ProjectDir(),TEXT("TypeScript"),TEXT("MainGame.ts"));
+					const FString MainGameTsPath = FPaths::Combine(FPaths::ProjectDir(), TYPE_SCRIPT_DIR,TEXT("MainGame.ts"));
 					if (FPaths::FileExists(MainGameTsPath))
 					{
 						FString MainGameTsContent;
@@ -215,25 +229,15 @@ void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
 // 获取当前活动蓝图
 UBlueprint* FAutoMixinEditorModule::GetActiveBlueprint()
 {
-	// 获取所有正在编辑的资产
-	TArray<UObject*> EditedAssets = AssetEditorSubsystem->GetAllEditedAssets();
-	// 初始化最后激活的蓝图指针
-	UBlueprint* LastBlueprint = nullptr;
-	// 初始化最后聚焦的编辑器窗口
-	IAssetEditorInstance* AssetEditorInstance = nullptr;
-
 	// 遍历所有被编辑的资产，寻找最后编辑的蓝图资产
-	for (UObject* EditedAsset : EditedAssets)
+	for (const TArray<UObject*> EditedAssets = AssetEditorSubsystem->GetAllEditedAssets(); UObject* EditedAsset : EditedAssets)
 	{
-		// 第一步：过滤非蓝图资产
-		if (!IsValid(EditedAsset)) continue;
-		if (!EditedAsset->IsA<UBlueprint>()) continue;
-
-		// 第二步：获取关联的编辑器实例
+		// 获取当前编辑的资产对应的编辑器实例
 		AssetEditorInstance = AssetEditorSubsystem->FindEditorForAsset(EditedAsset, false);
-		if (!AssetEditorInstance) continue;
 
-		// 第三步：检查当前编辑的资产是否是最后聚焦的编辑器窗口 当最后选中的编辑器窗口与当前资产的编辑器窗口相同时，记录该蓝图资产
+		if (!AssetEditorInstance || !IsValid(EditedAsset) || !EditedAsset->IsA<UBlueprint>()) continue;
+
+		// 检查当前编辑的资产是否是活动资产
 		if (LastForegroundTab.IsValid() && LastForegroundTab == AssetEditorInstance->GetAssociatedTabManager()->GetOwnerTab())
 		{
 			LastBlueprint = CastChecked<UBlueprint>(EditedAsset);
@@ -260,9 +264,9 @@ FString FAutoMixinEditorModule::ProcessTemplate(const FString& TemplateContent, 
 	BlueprintPath += TEXT("_C");
 	const FString BlueprintClass = TEXT("UE") + BlueprintPath.Replace(TEXT("/"), TEXT("."));
 
-	static const FString BLUEPRINT_PATH = TEXT("BLUEPRINT_PATH"); // 蓝图路径
-	static const FString MIXIN_BLUEPRINT_TYPE = TEXT("MIXIN_BLUEPRINT_TYPE"); // 混入蓝图类型
-	static const FString TS_NAME = TEXT("TS_NAME"); // TS文件名
+	const FString BLUEPRINT_PATH = TEXT("BLUEPRINT_PATH"); // 蓝图路径
+	const FString MIXIN_BLUEPRINT_TYPE = TEXT("MIXIN_BLUEPRINT_TYPE"); // 混入蓝图类型
+	const FString TS_NAME = TEXT("TS_NAME"); // TS文件名
 
 	Result = Result.Replace(*BLUEPRINT_PATH, *BlueprintPath); // 替换 蓝图路径
 	Result = Result.Replace(*MIXIN_BLUEPRINT_TYPE, *BlueprintClass); // 替换 混入蓝图类型
@@ -296,7 +300,7 @@ void FAutoMixinEditorModule::InitStyleSet()
 	StyleSet = MakeShared<FSlateStyleSet>(GetStyleName());
 
 	// 定义图标路径，从项目插件目录下指定子路径到达资源目录
-	const FString IconPath = FPaths::Combine(FPaths::ProjectPluginsDir(),TEXT("Puerts"),TEXT("Resources"));
+	const FString IconPath = FPaths::Combine(FPaths::ProjectPluginsDir(), PUERTS_RESOURCES_PATH);
 
 	// 在样式集合中设置一个名为"MixinIcon"的图标，使用指定路径下的图像文件
 	StyleSet->Set("MixinIcon", new FSlateImageBrush(IconPath / "CreateFilecon.png", FVector2D(40, 40)));
@@ -313,6 +317,9 @@ void FAutoMixinEditorModule::ShutdownModule()
 		FSlateStyleRegistry::UnRegisterSlateStyle(*StyleSet);
 		StyleSet.Reset();
 	}
+
+	// 取消订阅标签切换事件
+	FGlobalTabmanager::Get()->OnTabForegrounded_Unsubscribe(TabForegroundedHandle);
 }
 
 // 添加混入文件
@@ -320,7 +327,7 @@ void FAutoMixinEditorModule::AddMixinFile() const
 {
 	if (!FPaths::FileExists(MixinPath))
 	{
-		const FString MixinTemplatePath = FPaths::Combine(FPaths::ProjectPluginsDir(),TEXT("Puerts"),TEXT("Resources"),TEXT("MixinTemplate.ts"));
+		const FString MixinTemplatePath = FPaths::Combine(FPaths::ProjectPluginsDir(), PUERTS_RESOURCES_PATH, TEMPLATE_NAME);
 		FString MixinContent;
 		if (FFileHelper::LoadFileToString(MixinContent, *MixinTemplatePath))
 		{
