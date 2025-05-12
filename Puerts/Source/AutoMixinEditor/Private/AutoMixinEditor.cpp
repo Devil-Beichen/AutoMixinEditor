@@ -11,10 +11,17 @@
 TSharedPtr<FSlateStyleSet> FAutoMixinEditorModule::StyleSet = nullptr;
 
 // 存储最后一个标签页
-static TWeakPtr<SDockTab> LastForegroundTab;
+static TWeakPtr<SDockTab> LastForegroundTab = nullptr;
+
+// 获取AssetEditorSubsystem
+static UAssetEditorSubsystem* AssetEditorSubsystem = nullptr;
 
 void FAutoMixinEditorModule::StartupModule()
 {
+
+	// 获取AssetEditorSubsystem
+	AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
+
 	AddMixinFile(); // 添加mixin文件
 	InitStyleSet(); // 初始化样式
 	RegistrationButton(); // 注册按键
@@ -36,7 +43,6 @@ void FAutoMixinEditorModule::StartupModule()
 		})
 	);
 }
-
 // 注册按键
 void FAutoMixinEditorModule::RegistrationButton() const
 {
@@ -209,8 +215,6 @@ void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
 // 获取当前活动蓝图
 UBlueprint* FAutoMixinEditorModule::GetActiveBlueprint()
 {
-	// 获取编辑子系统实例
-	UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
 	// 获取所有正在编辑的资产
 	TArray<UObject*> EditedAssets = AssetEditorSubsystem->GetAllEditedAssets();
 	// 初始化最后激活的蓝图指针
