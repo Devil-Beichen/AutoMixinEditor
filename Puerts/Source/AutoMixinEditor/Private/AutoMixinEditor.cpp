@@ -10,6 +10,7 @@
 
 // 常量定义
 static const FString TEMPLATE_NAME = TEXT("MixinTemplate.ts"); // 模板文件名
+static const FString MIXIN_NAME = TEXT("mixin.ts"); // mixin文件名
 static const FString TYPE_SCRIPT_DIR = TEXT("TypeScript"); // TypeScript文件夹
 static const FString PUERTS_RESOURCES_PATH = TEXT("Puerts/Resources"); // Puerts资源路径
 
@@ -327,7 +328,7 @@ void FAutoMixinEditorModule::AddMixinFile() const
 {
 	if (!FPaths::FileExists(MixinPath))
 	{
-		const FString MixinTemplatePath = FPaths::Combine(FPaths::ProjectPluginsDir(), PUERTS_RESOURCES_PATH, TEMPLATE_NAME);
+		const FString MixinTemplatePath = FPaths::Combine(FPaths::ProjectPluginsDir(), PUERTS_RESOURCES_PATH, MIXIN_NAME);
 		FString MixinContent;
 		if (FFileHelper::LoadFileToString(MixinContent, *MixinTemplatePath))
 		{
