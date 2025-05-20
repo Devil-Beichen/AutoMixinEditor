@@ -1,5 +1,6 @@
 ﻿#include "AutoMixinEditor.h"
 
+#include "BlueprintEditor.h"
 #include "BlueprintEditorModule.h"
 #include "ContentBrowserModule.h"
 #include "Framework/Notifications/NotificationManager.h"
