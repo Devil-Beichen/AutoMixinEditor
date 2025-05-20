@@ -52,7 +52,7 @@ void FAutoMixinEditorModule::StartupModule()
 			LastForegroundTab = NewlyActiveTab;
 			if (LastForegroundTab.IsValid())
 			{
-				// UE_LOG(LogTemp, Log, TEXT("标签页已切换: %s"), *LastForegroundTab.Pin().Get()->GetTabLabel().ToString());
+				UE_LOG(LogTemp, Log, TEXT("标签页已切换: %s"), *LastForegroundTab.Pin().Get()->GetTabLabel().ToString());
 			}
 		})
 	);
@@ -173,7 +173,7 @@ void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
 		BlueprintPath.Split(".", &Lefts, &Rights);
 
 		// ts文件路径
-		FString TsFilePath = Lefts.Replace(TEXT("/Game"),TEXT("TypeScript"));
+		FString TsFilePath = FString(TEXT("TypeScript")) + Lefts.Mid(5);
 		TsFilePath = FPaths::Combine(FPaths::ProjectDir(), *(TsFilePath + ".ts"));
 
 		// 如果ts文件不存在，则创建它
@@ -206,7 +206,7 @@ void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
 						FString MainGameTsContent;
 						if (FFileHelper::LoadFileToString(MainGameTsContent, *MainGameTsPath))
 						{
-							const FString TsPath = Lefts.Replace(TEXT("/Game"),TEXT(""));
+							const FString TsPath = Lefts.Mid(5);
 							// 确保没有重复的导入语句
 							if (!MainGameTsContent.Contains(TEXT("import \".") + TsPath + "\";"))
 							{
@@ -227,19 +227,27 @@ void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
 	}
 }
 
-// 获取当前活动蓝图
+/**
+ * @brief 获取当前激活的蓝图
+ *
+ * 遍历所有被编辑的资产，找到与最后前景标签匹配的活动蓝图。
+ * 如果找到匹配的蓝图，则将其记录为最后激活的蓝图并返回。
+ *
+ * @return 当前激活的蓝图对象，如果未找到则返回nullptr
+ */
 UBlueprint* FAutoMixinEditorModule::GetActiveBlueprint()
 {
-	// 遍历所有被编辑的资产，寻找最后编辑的蓝图资产
+	// 遍历所有被编辑的资产 并找到活动蓝图
 	for (const TArray<UObject*> EditedAssets = AssetEditorSubsystem->GetAllEditedAssets(); UObject* EditedAsset : EditedAssets)
 	{
-		// 获取当前编辑的资产对应的编辑器实例
 		AssetEditorInstance = AssetEditorSubsystem->FindEditorForAsset(EditedAsset, false);
 
 		if (!AssetEditorInstance || !IsValid(EditedAsset) || !EditedAsset->IsA<UBlueprint>()) continue;
 
-		// 检查当前编辑的资产是否是活动资产
-		if (LastForegroundTab.IsValid() && LastForegroundTab == AssetEditorInstance->GetAssociatedTabManager()->GetOwnerTab())
+		if (
+			LastForegroundTab.Pin().Get()->GetTabLabel().ToString() ==
+			AssetEditorInstance->GetAssociatedTabManager().Get()->GetOwnerTab().Get()->GetTabLabel().ToString()
+		)
 		{
 			LastBlueprint = CastChecked<UBlueprint>(EditedAsset);
 			break;
