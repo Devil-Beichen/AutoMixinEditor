@@ -12,4 +12,4 @@
 
 
 ##演示地址
-[B站]<https://www.bilibili.com/video/BV17XVUzEEju/?spm_id_from=333.1387.0.0&vd_source=6319e58e80fa1064859dfb0ad18639c3>
+[B站]<https://www.bilibili.com/video/BV17XVUzEEju>
