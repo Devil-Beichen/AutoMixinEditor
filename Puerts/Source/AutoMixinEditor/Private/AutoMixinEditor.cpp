@@ -53,7 +53,7 @@ void FAutoMixinEditorModule::StartupModule()
 			LastForegroundTab = NewlyActiveTab;
 			if (LastForegroundTab.IsValid())
 			{
-				UE_LOG(LogTemp, Log, TEXT("标签页已切换: %s"), *LastForegroundTab.Pin().Get()->GetTabLabel().ToString());
+				// UE_LOG(LogTemp, Log, TEXT("标签页已切换: %s"), *LastForegroundTab.Pin().Get()->GetTabLabel().ToString());
 			}
 		})
 	);
