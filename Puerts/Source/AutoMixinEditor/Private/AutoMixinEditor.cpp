@@ -1,6 +1,5 @@
 ﻿#include "AutoMixinEditor.h"
 
-#include "BlueprintEditor.h"
 #include "BlueprintEditorModule.h"
 #include "ContentBrowserModule.h"
 #include "Framework/Notifications/NotificationManager.h"
@@ -50,6 +49,8 @@ void FAutoMixinEditorModule::StartupModule()
 			{
 				return;
 			}
+			// 不等于主要的Tab（比如EventGraph，等图标）也返回
+			if (NewlyActiveTab.Get()->GetTabRole() != MajorTab) return;
 			LastForegroundTab = NewlyActiveTab;
 			if (LastForegroundTab.IsValid())
 			{
