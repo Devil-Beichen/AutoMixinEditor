@@ -12,4 +12,5 @@ export interface TS_NAME extends MIXIN_BLUEPRINT_TYPE {
 // 创建一个继承ts的本体类    implements   实现类型提示
 @mixin(AssetPath)
 export class TS_NAME implements TS_NAME {
+    static StaticClass: () => UE.Class;
 }
