@@ -3,7 +3,10 @@
 #include "BlueprintEditorModule.h"
 #include "ContentBrowserModule.h"
 #include "Framework/Notifications/NotificationManager.h"
+#include "Kismet2/BlueprintEditorUtils.h"
+#include "Kismet2/KismetEditorUtilities.h"
 #include "Styling/SlateStyleRegistry.h"
+#include "Subsystems/EditorAssetSubsystem.h"
 #include "Widgets/Notifications/SNotificationList.h"
 
 #define LOCTEXT_NAMESPACE "FAutoMixinEditorModule"
@@ -146,8 +149,11 @@ void FAutoMixinEditorModule::RegistrationContextButton() const
 void FAutoMixinEditorModule::ButtonPressed()
 {
 	// UE_LOG(LogTemp, Log, TEXT("ButtonPressed"));
-
-	GenerateTs(GetActiveBlueprint());
+	if (UBlueprint* Blueprint = GetActiveBlueprint())
+	{
+		GenerateTs(Blueprint);
+		// AddInterfaceToBlueprint(Blueprint);
+	}
 }
 
 void FAutoMixinEditorModule::ContextButtonPressed(const TArray<FAssetData>& SelectedAssets)
@@ -157,12 +163,68 @@ void FAutoMixinEditorModule::ContextButtonPressed(const TArray<FAssetData>& Sele
 	for (const FAssetData& AssetData : SelectedAssets)
 	{
 		// 获取选中的蓝图
-		if (const UBlueprint* Blueprint = Cast<UBlueprint>(AssetData.GetAsset()))
+		if (UBlueprint* Blueprint = Cast<UBlueprint>(AssetData.GetAsset()))
 		{
 			GenerateTs(Blueprint);
+			// AddInterfaceToBlueprint(Blueprint);
 		}
 	}
 }
+
+/**
+ * @brief 向给定的蓝图添加AutoMixin接口
+ * 
+ * 该函数检查蓝图是否已经实现了指定的AutoMixin接口，如果没有则添加该接口，
+ * 并执行必要的蓝图编译、编辑器刷新和资源保存操作。
+ * 
+ * @param Blueprint 要添加接口的目标蓝图对象，如果为空则直接返回
+ */
+void FAutoMixinEditorModule::AddInterfaceToBlueprint(UBlueprint* Blueprint)
+{
+	// 检查蓝图有效性
+	if (!Blueprint) return;
+
+	// 定义要添加的接口路径
+	const FTopLevelAssetPath InterfacePath(TEXT("/Script/AutoMixinEditor.AutoMixinInterface"));
+
+	// 检查蓝图是否已经实现了该接口
+	UE_LOG(LogTemp, Log, TEXT("接口路径: %s"), *InterfacePath.ToString())
+	for (const FBPInterfaceDescription& InterfaceDesc : Blueprint->ImplementedInterfaces)
+	{
+		if (InterfaceDesc.Interface != nullptr && InterfaceDesc.Interface->GetClassPathName() == InterfacePath) return;
+	}
+
+	// 尝试实现新接口
+	if (FBlueprintEditorUtils::ImplementNewInterface(Blueprint, InterfacePath))
+	{
+		// 接口添加成功后的处理流程
+		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+		FKismetEditorUtilities::CompileBlueprint(Blueprint);
+
+		// 查找并刷新所有正在编辑该蓝图的编辑器
+		FBlueprintEditorModule& BlueprintEditorModule = FModuleManager::LoadModuleChecked<FBlueprintEditorModule>("Kismet");
+		TSharedPtr<IBlueprintEditor> FoundEditor;
+		const TArray<TSharedRef<IBlueprintEditor>>& Editors = BlueprintEditorModule.GetBlueprintEditors();
+
+		for (const TSharedRef<IBlueprintEditor>& Editor : Editors)
+		{
+			if (!Editor->IsBlueprintEditor()) continue;
+			const TArray<UObject*>* EditedAssets = Editor.Get().GetObjectsCurrentlyBeingEdited();
+			if (EditedAssets->Contains(Blueprint))
+			{
+				Editor->RefreshInspector();
+			}
+		}
+
+		// 保存修改后的蓝图资产
+		const FString AssetPath = Blueprint->GetOutermost()->GetName();
+		if (UEditorAssetSubsystem* EditorAssetSubsystem = GEditor->GetEditorSubsystem<UEditorAssetSubsystem>())
+		{
+			EditorAssetSubsystem->SaveAsset(AssetPath, true);
+		}
+	}
+}
+
 
 // 生成TS文件
 void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
@@ -173,9 +235,18 @@ void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
 		const FString BlueprintPath = Blueprint->GetPathName();
 		FString Lefts, Rights;
 		BlueprintPath.Split(".", &Lefts, &Rights);
+		
+		TArray<FString> OutStrings;
+		Lefts.ParseIntoArray(OutStrings,TEXT("/"), true);
+
+		// 实际路径
+		FString ActualPath;
+
+		if (OutStrings[0] == "Game")ActualPath = Lefts.Mid(5);
+		else ActualPath = Lefts;
 
 		// ts文件路径
-		FString TsFilePath = FString(TEXT("TypeScript")) + Lefts.Mid(5);
+		FString TsFilePath = FString(TEXT("TypeScript")) + ActualPath;
 		TsFilePath = FPaths::Combine(FPaths::ProjectDir(), *(TsFilePath + ".ts"));
 
 		// 如果ts文件不存在，则创建它
@@ -208,11 +279,10 @@ void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
 						FString MainGameTsContent;
 						if (FFileHelper::LoadFileToString(MainGameTsContent, *MainGameTsPath))
 						{
-							const FString TsPath = Lefts.Mid(5);
 							// 确保没有重复的导入语句
-							if (!MainGameTsContent.Contains(TEXT("import \".") + TsPath + "\";"))
+							if (!MainGameTsContent.Contains(TEXT("import \".") + ActualPath + "\";"))
 							{
-								MainGameTsContent += TEXT("import \"."+TsPath + "\";\n");
+								MainGameTsContent += TEXT("import \"."+ActualPath + "\";\n");
 								FFileHelper::SaveStringToFile(MainGameTsContent, *MainGameTsPath, FFileHelper::EEncodingOptions::ForceUTF8);
 								UE_LOG(LogTemp, Log, TEXT("MainGame.ts更新成功"));
 							}
