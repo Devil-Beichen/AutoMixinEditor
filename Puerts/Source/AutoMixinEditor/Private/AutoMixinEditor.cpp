@@ -17,6 +17,8 @@ static const FString MIXIN_NAME = TEXT("mixin.ts"); // mixin文件名
 static const FString TYPE_SCRIPT_DIR = TEXT("TypeScript"); // TypeScript文件夹
 static const FString PUERTS_RESOURCES_PATH = TEXT("Puerts/Resources"); // Puerts资源路径
 
+static const FString AUTO_IMPORT_NAME = TEXT("AutoImport.ts"); // 自动导入文件名
+
 TSharedPtr<FSlateStyleSet> FAutoMixinEditorModule::StyleSet = nullptr;
 
 // 存储最后一个标签页
@@ -178,7 +180,7 @@ void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
 		const FString BlueprintPath = Blueprint->GetPathName();
 		FString Lefts, Rights;
 		BlueprintPath.Split(".", &Lefts, &Rights);
-		
+
 		TArray<FString> OutStrings;
 		Lefts.ParseIntoArray(OutStrings,TEXT("/"), true);
 
@@ -215,20 +217,20 @@ void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
 					Info.ExpireDuration = 5.f;
 					FSlateNotificationManager::Get().AddNotification(Info);
 
-					// 更新MainGame.ts文件
-					const FString MainGameTsPath = FPaths::Combine(FPaths::ProjectDir(), TYPE_SCRIPT_DIR,TEXT("MainGame.ts"));
-					if (FPaths::FileExists(MainGameTsPath))
+					// 更新AutoImport.ts文件
+					const FString AutoImportTsPath = FPaths::Combine(FPaths::ProjectDir(), TYPE_SCRIPT_DIR, AUTO_IMPORT_NAME);
+					FString AutoImportTsContent;
+
+					// 读取现有内容
+					if (FFileHelper::LoadFileToString(AutoImportTsContent, *AutoImportTsPath))
 					{
-						FString MainGameTsContent;
-						if (FFileHelper::LoadFileToString(MainGameTsContent, *MainGameTsPath))
+						// 确保没有重复的导入语句
+						const FString ImportStatement = TEXT("import \"./") + ActualPath.Mid(1) + "\";";
+						if (!AutoImportTsContent.Contains(ImportStatement))
 						{
-							// 确保没有重复的导入语句
-							if (!MainGameTsContent.Contains(TEXT("import \".") + ActualPath + "\";"))
-							{
-								MainGameTsContent += TEXT("import \"."+ActualPath + "\";\n");
-								FFileHelper::SaveStringToFile(MainGameTsContent, *MainGameTsPath, FFileHelper::EEncodingOptions::ForceUTF8);
-								UE_LOG(LogTemp, Log, TEXT("MainGame.ts更新成功"));
-							}
+							AutoImportTsContent += ImportStatement + TEXT("\n");
+							FFileHelper::SaveStringToFile(AutoImportTsContent, *AutoImportTsPath, FFileHelper::EEncodingOptions::ForceUTF8);
+							UE_LOG(LogTemp, Log, TEXT("AutoImport.ts更新成功"));
 						}
 					}
 				}
@@ -357,6 +359,14 @@ void FAutoMixinEditorModule::AddMixinFile() const
 		{
 			FFileHelper::SaveStringToFile(MixinContent, *MixinPath, FFileHelper::EEncodingOptions::ForceUTF8);
 		}
+	}
+
+	// 生成 AutoImport.ts 文件
+	const FString AutoImportPath = FPaths::Combine(FPaths::ProjectDir(), TYPE_SCRIPT_DIR, AUTO_IMPORT_NAME);
+	if (!FPaths::FileExists(AutoImportPath))
+	{
+		const FString AutoImportContent = TEXT("// 自动导入文件，用于导入所有通过Puerts创建的UE蓝图TypeScript绑定文件\n\n");
+		FFileHelper::SaveStringToFile(AutoImportContent, *AutoImportPath, FFileHelper::EEncodingOptions::ForceUTF8);
 	}
 }
 
