@@ -207,8 +207,36 @@ void FAutoMixinEditorModule::GenerateTs(const UBlueprint* Blueprint)
 			FString TemplateContent;
 			if (FFileHelper::LoadFileToString(TemplateContent, *TemplatePath))
 			{
+
+
+				const FString TypeScriptRootPath = FPaths::Combine(FPaths::ProjectDir(), TYPE_SCRIPT_DIR);
+				const FString TsFileDir = FPaths::GetPath(TsFilePath);
+				
+				// 计算从TS文件目录到TypeScript根目录的相对路径
+				// 需要在目录路径后添加 "/" 以确保 MakePathRelativeTo 正确工作
+				FString RootRelativePath = TypeScriptRootPath / TEXT("");
+				const FString TsFileDirWithSlash = TsFileDir / TEXT("");
+				
+				if (FPaths::MakePathRelativeTo(RootRelativePath, *TsFileDirWithSlash))
+				{
+					// 移除末尾的斜杠（如果有）
+					RootRelativePath.RemoveFromEnd(TEXT("/"));
+					// 如果路径为空，说明在同一目录
+					if (RootRelativePath.IsEmpty())
+					{
+						RootRelativePath = TEXT(".");
+					}
+				}
+				else
+				{
+					// 如果计算失败，使用默认值
+					RootRelativePath = TEXT(".");
+				}
+
+				UE_LOG(LogTemp, Log, TEXT("计算出的相对路径: %s"), *RootRelativePath);
+
 				// 处理模板并生成ts文件内容
-				const FString TsContent = ProcessTemplate(TemplateContent, BlueprintPath, FileName);
+				const FString TsContent = ProcessTemplate(TemplateContent, BlueprintPath, FileName, RootRelativePath);
 				// 保存生成的内容到文件
 				if (FFileHelper::SaveStringToFile(TsContent, *TsFilePath, FFileHelper::EEncodingOptions::ForceUTF8))
 				{
@@ -276,13 +304,14 @@ UBlueprint* FAutoMixinEditorModule::GetActiveBlueprint()
 }
 
 /**
- * @brief					处理模板
- * @param TemplateContent	模板内容 
- * @param BlueprintPath		蓝图路径
- * @param FileName			文件名
- * @return 
- */
-FString FAutoMixinEditorModule::ProcessTemplate(const FString& TemplateContent, FString BlueprintPath, const FString& FileName)
+* 处理模板
+* @param TemplateContent	模板内容 
+* @param BlueprintPath		蓝图路径
+* @param FileName			文件名
+* @param RootRelativePath	相对脚本根目录路径（用于替换ROOT_PATH）
+* @return 
+*/
+FString FAutoMixinEditorModule::ProcessTemplate(const FString& TemplateContent, FString BlueprintPath, const FString& FileName, const FString& RootRelativePath)
 {
 	FString Result = TemplateContent;
 
@@ -290,10 +319,12 @@ FString FAutoMixinEditorModule::ProcessTemplate(const FString& TemplateContent, 
 	BlueprintPath += TEXT("_C");
 	const FString BlueprintClass = TEXT("UE") + BlueprintPath.Replace(TEXT("/"), TEXT("."));
 
+	const FString ROOT_PATH = TEXT("ROOT_PATH"); // 脚本根目录路径
 	const FString BLUEPRINT_PATH = TEXT("BLUEPRINT_PATH"); // 蓝图路径
 	const FString MIXIN_BLUEPRINT_TYPE = TEXT("MIXIN_BLUEPRINT_TYPE"); // 混入蓝图类型
 	const FString TS_NAME = TEXT("TS_NAME"); // TS文件名
 
+	Result = Result.Replace(*ROOT_PATH, *RootRelativePath); // 替换 脚本根目录路径
 	Result = Result.Replace(*BLUEPRINT_PATH, *BlueprintPath); // 替换 蓝图路径
 	Result = Result.Replace(*MIXIN_BLUEPRINT_TYPE, *BlueprintClass); // 替换 混入蓝图类型
 	Result = Result.Replace(*TS_NAME, *FileName); // 替换 TS文件名

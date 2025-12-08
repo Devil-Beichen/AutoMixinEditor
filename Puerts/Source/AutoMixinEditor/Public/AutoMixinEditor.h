@@ -36,9 +36,10 @@ private:
 	 * @param TemplateContent	模板内容 
 	 * @param BlueprintPath		蓝图路径路径
 	 * @param FileName			文件名
+	 * @param RootRelativePath	相对脚本根目录路径（用于替换ROOT_PATH）
 	 * @return 
 	 */
-	static FString ProcessTemplate(const FString& TemplateContent, FString BlueprintPath, const FString& FileName);
+	static FString ProcessTemplate(const FString& TemplateContent, FString BlueprintPath, const FString& FileName, const FString& RootRelativePath);
 
 	// 样式名称
 	static FName GetStyleName();

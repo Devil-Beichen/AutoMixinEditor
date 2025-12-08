@@ -1,4 +1,5 @@
 ﻿import * as UE from "ue";
+import mixin from "ROOT_PATH/mixin";
 
 // 资产路径
 const AssetPath = "BLUEPRINT_PATH";
